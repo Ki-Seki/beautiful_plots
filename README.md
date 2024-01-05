@@ -12,7 +12,7 @@ import numpy as np
 
 def draw_radar(
     data: List[list],
-    ylim: Tuple[int, int] = None,
+    ylim: Tuple[float, float] = None,
     fill: bool = True,
     save_path: str = 'radar.pdf'
 ):
@@ -20,7 +20,7 @@ def draw_radar(
 
     Note:
         The data should be a list of lists, where the first row is the header,
-        and the first column is the label.
+        and the first column is the label. Missing values are allowed.
 
     Example:
         ```
@@ -34,7 +34,7 @@ def draw_radar(
 
     Args:
         data (List[list]): The data to draw.
-        ylim (Tuple[int, int], optional): The y-axis limit. Defaults to None.
+        ylim (Tuple[float, float], optional): The y-axis limit. Defaults to None.
         fill (bool, optional): Whether to fill the area. Defaults to True.
         save_path (str, optional): The path to save the figure. Defaults to 'radar.pdf'.
     """
