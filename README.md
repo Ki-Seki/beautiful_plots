@@ -60,7 +60,7 @@ def draw_radar(
         plt.polar(real_angles, real_data, 'o-', label=label)
         plt.fill(real_angles, real_data, alpha=0.2) if fill else ...
 
-    plt.thetagrids([angle*180/math.pi for angle in angles], [*header, header[1]])
+    plt.thetagrids([angle*180/math.pi for angle in angles], [*header, header[0]])
     plt.ylim(*ylim) if ylim is not None else ...
     plt.legend(loc = (1.05,0))
     plt.grid(True)
