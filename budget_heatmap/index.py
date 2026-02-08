@@ -261,12 +261,13 @@ def main():
     if not global_model_order:
         raise ValueError("No models available for visualization.")
 
-    fig_width = max(11.0, 5.0 * ncols)
-    fig_height = 2.5 + 0.55 * len(global_model_order)
+    fig_width = max(9.5, 4.3 * ncols + 0.8)
+    fig_height = max(4.2, 2.0 + 0.5 * len(global_model_order))
     fig = plt.figure(figsize=(fig_width, fig_height))
-    grid = fig.add_gridspec(2, ncols, height_ratios=[1.0, 0.08], hspace=0.32, wspace=0.28)
+    width_ratios = [1.0] * ncols + [0.08]
+    grid = fig.add_gridspec(1, ncols + 1, width_ratios=width_ratios, wspace=0.22)
     axes = [fig.add_subplot(grid[0, i]) for i in range(ncols)]
-    gradient_ax = fig.add_subplot(grid[1, :])
+    gradient_ax = fig.add_subplot(grid[0, -1])
 
     cmap = LinearSegmentedColormap.from_list(
         "soft_accuracy",
@@ -311,13 +312,13 @@ def main():
         if ax_idx == 0:
             ax.set_yticklabels(
                 [format_model_name(m) for m in global_model_order],
-                fontsize=10.5,
+                fontsize=8.6,
                 fontweight="medium",
                 ha="right",
             )
         else:
             ax.set_yticklabels([])
-        ax.tick_params(axis="y", pad=28)
+        ax.tick_params(axis="y", pad=15)
         # === Paper Terminology Alignment ===
         display_name = dataset_name
         if isinstance(dataset_name, str):
@@ -330,19 +331,22 @@ def main():
         ax.set_xlabel(
             "Reasoning Budget (CoT vs. GIM)",
             fontsize=10,
-            fontweight="semibold",
-            labelpad=8,
+            fontweight="normal",
+            labelpad=14,
         )
         ax.set_title(display_name, fontsize=12, fontweight="semibold", pad=10)
         ax.tick_params(axis="both", which="both", length=0)
         ax.set_facecolor("#f4f6fb")
+        ax.set_xlim(-0.5, len(BUDGET_ORDER) - 0.5)
+        ax.set_ylim(len(global_model_order) - 0.5, -0.5)
+        ax.set_aspect("equal")
 
         ax.set_xticks(np.arange(-0.5, len(BUDGET_ORDER), 1), minor=True)
         ax.set_yticks(np.arange(-0.5, len(global_model_order), 1), minor=True)
         ax.grid(which="minor", color="white", linewidth=0.9)
         ax.axvline(0.5, color="#9aa5c4", linewidth=0.9, linestyle="--")
-        bracket_top = -0.02
-        bracket_bottom = -0.08
+        bracket_top = -0.04
+        bracket_bottom = -0.10
         verts = [
             (0.5, bracket_top),
             (0.5, bracket_bottom),
@@ -354,7 +358,7 @@ def main():
             path,
             transform=ax.get_xaxis_transform(),
             linewidth=1.2,
-            color="#5c6a8a",
+            color="#9aa5c4",
             fill=False,
             capstyle="round",
             joinstyle="round",
@@ -392,36 +396,42 @@ def main():
                         alpha=0.88,
                         path_effects=token_outline,
                     )
-    gradient = np.linspace(0, 1, 256).reshape(1, -1)
-    gradient_ax.imshow(gradient, aspect="auto", cmap=cmap, extent=[0, 1, 0, 1])
+    gradient = np.linspace(0, 1, 256).reshape(-1, 1)
+    gradient_ax.imshow(gradient, aspect="auto", cmap=cmap, origin="lower")
     gradient_ax.set_xticks([])
     gradient_ax.set_yticks([])
     gradient_ax.set_facecolor("white")
+    for spine in gradient_ax.spines.values():
+        spine.set_visible(False)
     gradient_ax.annotate(
         "",
-        xy=(0.08, -0.25),
-        xytext=(0.92, -0.25),
+        xy=(0.5, 0.92),
+        xytext=(0.5, 0.08),
+        xycoords="axes fraction",
         arrowprops=dict(arrowstyle="-|>", color="#4a5268", lw=0.9),
         annotation_clip=False,
     )
     # === Paper Terminology Alignment ===
     gradient_ax.text(
+        1.25,
         0.5,
-        -0.48,
         "Accuracy (%)",
         ha="center",
-        va="top",
+        va="center",
         fontsize=9.5,
         fontweight="semibold",
         color="#4a5268",
+        rotation=90,
+        rotation_mode="anchor",
+        transform=gradient_ax.transAxes,
     )
 
     if SHOW_TOKENS:
         # === Paper Terminology Alignment ===
         fig.text(
-            0.99,
-            0.04,
-            "Token annotations indicate average response tokens.",
+            0.96,
+            0.08,
+            "Values marked 'tok' report mean response tokens.",
             ha="right",
             va="bottom",
             fontsize=9,
@@ -429,7 +439,10 @@ def main():
             color="#4a5268",
         )
 
-    fig.subplots_adjust(left=0.32, right=0.98, top=0.9, bottom=0.24, wspace=0.24)
+    fig.subplots_adjust(left=0.22, right=0.965, top=0.94, bottom=0.21, wspace=0.16)
+    heat_pos = axes[0].get_position()
+    grad_pos = gradient_ax.get_position()
+    gradient_ax.set_position([grad_pos.x0, heat_pos.y0, grad_pos.width, heat_pos.height])
 
     fig.savefig(OUTPUT_PNG, dpi=300)
     fig.savefig(OUTPUT_PDF, dpi=300)
