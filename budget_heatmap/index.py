@@ -37,7 +37,8 @@ OUTPUT_PDF = BASE_DIR / "budget_heatmap.pdf"
 BUDGET_ORDER = ["CoT", "1", "3", "5", "7", "Auto"]
 ORDER_MAP = {label: idx for idx, label in enumerate(BUDGET_ORDER)}
 FIG_HEIGHT = 5.2
-BASE_WIDTH = 4.8
+BASE_WIDTH = 4.9
+FIG_SIZE = (11.5, 5.2)
 SHOW_TOKENS = True
 MAX_ALLOWED_ERRORS: Optional[int] = None
 
@@ -261,11 +262,10 @@ def main():
     if not global_model_order:
         raise ValueError("No models available for visualization.")
 
-    fig_width = max(9.5, 4.3 * ncols + 0.8)
-    fig_height = max(4.2, 2.0 + 0.5 * len(global_model_order))
+    fig_width, fig_height = FIG_SIZE
     fig = plt.figure(figsize=(fig_width, fig_height))
-    width_ratios = [1.0] * ncols + [0.08]
-    grid = fig.add_gridspec(1, ncols + 1, width_ratios=width_ratios, wspace=0.22)
+    width_ratios = [1.0] * ncols + [0.07]
+    grid = fig.add_gridspec(1, ncols + 1, width_ratios=width_ratios, wspace=0.08)
     axes = [fig.add_subplot(grid[0, i]) for i in range(ncols)]
     gradient_ax = fig.add_subplot(grid[0, -1])
 
@@ -328,12 +328,7 @@ def main():
                 "qasc": "QASC",
             }
             display_name = replacements.get(normalized, dataset_name)
-        ax.set_xlabel(
-            "Reasoning Budget (Free CoT vs. Structured GIM)",
-            fontsize=9,
-            fontweight="normal",
-            labelpad=14,
-        )
+        ax.set_xlabel("")
         ax.set_title(display_name, fontsize=12, fontweight="semibold", pad=10)
         ax.tick_params(axis="both", which="both", length=0)
         ax.set_facecolor("#f4f6fb")
@@ -345,26 +340,6 @@ def main():
         ax.set_yticks(np.arange(-0.5, len(global_model_order), 1), minor=True)
         ax.grid(which="minor", color="white", linewidth=0.9)
         ax.axvline(0.5, color="#9aa5c4", linewidth=0.9, linestyle="--")
-        bracket_top = -0.04
-        bracket_bottom = -0.10
-        verts = [
-            (0.5, bracket_top),
-            (0.5, bracket_bottom),
-            (len(BUDGET_ORDER) - 0.5, bracket_bottom),
-            (len(BUDGET_ORDER) - 0.5, bracket_top),
-        ]
-        path = Path(verts, [Path.MOVETO, Path.LINETO, Path.LINETO, Path.LINETO])
-        bracket = PathPatch(
-            path,
-            transform=ax.get_xaxis_transform(),
-            linewidth=1.2,
-            color="#9aa5c4",
-            fill=False,
-            capstyle="round",
-            joinstyle="round",
-            clip_on=False,
-        )
-        ax.add_patch(bracket)
 
         for r_idx in range(len(global_model_order)):
             for c_idx in range(len(BUDGET_ORDER)):
@@ -426,20 +401,9 @@ def main():
         transform=gradient_ax.transAxes,
     )
 
-    if SHOW_TOKENS:
-        # === Paper Terminology Alignment ===
-        fig.text(
-            0.96,
-            0.08,
-            "Values marked 'tok' report mean response tokens.",
-            ha="right",
-            va="bottom",
-            fontsize=9,
-            fontweight="medium",
-            color="#4a5268",
-        )
 
-    fig.subplots_adjust(left=0.22, right=0.965, top=0.94, bottom=0.21, wspace=0.16)
+
+    fig.subplots_adjust(left=0.18, right=0.982, top=0.93, bottom=0.06, wspace=0.08)
     heat_pos = axes[0].get_position()
     grad_pos = gradient_ax.get_position()
     gradient_ax.set_position([grad_pos.x0, heat_pos.y0, grad_pos.width, heat_pos.height])
