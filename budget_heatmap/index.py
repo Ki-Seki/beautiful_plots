@@ -329,8 +329,8 @@ def main():
             }
             display_name = replacements.get(normalized, dataset_name)
         ax.set_xlabel(
-            "Reasoning Budget (CoT vs. GIM)",
-            fontsize=10,
+            "Reasoning Budget (Free CoT vs. Structured GIM)",
+            fontsize=9,
             fontweight="normal",
             labelpad=14,
         )
