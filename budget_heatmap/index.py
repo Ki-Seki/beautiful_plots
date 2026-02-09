@@ -174,7 +174,7 @@ def draw_heatmap_panel(
             ax.text(
                 c_idx,
                 r_idx - 0.15,
-                f"{acc_val:.1f}%",
+                f"{acc_val:.2f}%",
                 ha="center",
                 va="center",
                 fontsize=8,
