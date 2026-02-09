@@ -42,6 +42,30 @@ FIG_SIZE = (11.5, 5.2)
 SHOW_TOKENS = True
 MAX_ALLOWED_ERRORS: Optional[int] = None
 
+MODEL_ORDER_REFERENCE = [
+    "google/gemini-3-flash-preview",
+    "openai/gpt-5.2",
+    "anthropic/claude-haiku-4.5",
+    "x-ai/grok-4-fast",
+    "deepseek/deepseek-chat-v3-0324",
+    "xiaomi/mimo-v2-flash",
+    "minimax/minimax-m2.1",
+    "moonshotai/kimi-k2-thinking",
+    "qwen/qwen3-30b-a3b-instruct-2507",
+    "google/gemma-3-27b-it",
+    "mistralai/ministral-14b-2512",
+    "google/gemma-3-12b-it",
+    "Qwen/Qwen3-1.7B",
+    "Qwen/Qwen3-4B-Instruct-2507",
+    "GIM-1.7B",
+    "GIM-4B",
+]
+
+MODEL_NAME_ALIASES = {
+    "qwen3-4b-instruct-2507": "Qwen3-4B",
+    "qwen3-30b-a3b-instruct-2507": "qwen3-30b-a3b",
+}
+
 
 def format_dataset_name(name: Optional[str]) -> Optional[str]:
     if not isinstance(name, str) or not name.strip():
@@ -60,7 +84,21 @@ def format_model_name(name: Optional[str]) -> Optional[str]:
         return "GIM-4B"
     if "/" in cleaned:
         cleaned = cleaned.split("/")[-1]
+    alias = MODEL_NAME_ALIASES.get(cleaned.lower())
+    if alias:
+        return alias
     return cleaned
+
+
+def get_preferred_model_order():
+    normalized = []
+    seen = set()
+    for raw_name in MODEL_ORDER_REFERENCE:
+        formatted = format_model_name(raw_name)
+        if formatted and formatted not in seen:
+            normalized.append(formatted)
+            seen.add(formatted)
+    return normalized
 
 
 def get_column_name(df, *candidates):
@@ -256,9 +294,14 @@ def main():
     summary = summary.dropna(subset=["dataset_label", "model_label"])
     datasets = sorted(summary["dataset_label"].unique())
     ncols = len(datasets)
-    global_model_order = (
+    preferred_order = get_preferred_model_order()
+    accuracy_rank = (
         summary.groupby("model_label")["accuracy_num"].mean().sort_values(ascending=False).index.tolist()
     )
+    available_models = summary["model_label"].unique().tolist()
+    global_model_order = [model for model in preferred_order if model in available_models]
+    leftovers = [model for model in accuracy_rank if model not in global_model_order]
+    global_model_order.extend(leftovers)
     if not global_model_order:
         raise ValueError("No models available for visualization.")
 
