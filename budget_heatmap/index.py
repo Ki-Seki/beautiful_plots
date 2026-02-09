@@ -41,6 +41,7 @@ BASE_WIDTH = 4.9
 FIG_SIZE = (11.5, 5.2)
 SHOW_TOKENS = True
 MAX_ALLOWED_ERRORS: Optional[int] = None
+MODEL_LABEL_FONTSIZE = 10.0
 
 MODEL_ORDER_REFERENCE = [
     "google/gemini-3-flash-preview",
@@ -62,8 +63,8 @@ MODEL_ORDER_REFERENCE = [
 ]
 
 MODEL_NAME_ALIASES = {
-    "qwen3-4b-instruct-2507": "Qwen3-4B",
-    "qwen3-30b-a3b-instruct-2507": "qwen3-30b-a3b",
+    "qwen3-4b-instruct-2507": "Qwen3-4B-Inst...",
+    "qwen3-30b-a3b-instruct-2507": "qwen3-30b-a3b...",
 }
 
 
@@ -355,7 +356,7 @@ def main():
         if ax_idx == 0:
             ax.set_yticklabels(
                 [format_model_name(m) for m in global_model_order],
-                fontsize=8.6,
+                fontsize=MODEL_LABEL_FONTSIZE,
                 fontweight="medium",
                 ha="right",
             )
@@ -446,7 +447,7 @@ def main():
 
 
 
-    fig.subplots_adjust(left=0.18, right=0.982, top=0.93, bottom=0.06, wspace=0.08)
+    fig.subplots_adjust(left=0.14, right=0.982, top=0.93, bottom=0.01, wspace=0.08)
     heat_pos = axes[0].get_position()
     grad_pos = gradient_ax.get_position()
     gradient_ax.set_position([grad_pos.x0, heat_pos.y0, grad_pos.width, heat_pos.height])
