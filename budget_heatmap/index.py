@@ -67,6 +67,213 @@ MODEL_NAME_ALIASES = {
     "qwen3-30b-a3b-instruct-2507": "qwen3-30b-a3b...",
 }
 
+GENERATE_INDIVIDUAL_FIGURES = True
+INDIVIDUAL_FILENAME_TEMPLATE = "budget_heatmap_{slug}"
+INDIVIDUAL_FIG_SIZE = (BASE_WIDTH + 1.6, FIG_HEIGHT)
+
+
+def slugify_label(text: Optional[str]) -> str:
+    if not isinstance(text, str) or not text.strip():
+        return "dataset"
+    cleaned = re.sub(r"[^a-z0-9]+", "-", text.lower())
+    cleaned = cleaned.strip("-")
+    return cleaned or "dataset"
+
+
+def format_dataset_display(name: str) -> str:
+    if not isinstance(name, str):
+        return ""
+    normalized = name.lower()
+    replacements = {
+        "medmcqa": "MedMCQA",
+        "qasc": "QASC",
+    }
+    return replacements.get(normalized, name)
+
+
+def prepare_heatmap_data(summary, dataset_name, global_model_order):
+    dataset_df = summary[summary["dataset_label"] == dataset_name]
+    heat = np.full((len(global_model_order), len(BUDGET_ORDER)), np.nan)
+    token_grid = None
+    if SHOW_TOKENS:
+        token_grid = np.full((len(global_model_order), len(BUDGET_ORDER)), np.nan)
+
+    for m_idx, model_name in enumerate(global_model_order):
+        model_rows = dataset_df[dataset_df["model_label"] == model_name]
+        if model_rows.empty:
+            continue
+        for _, row in model_rows.iterrows():
+            b_idx = ORDER_MAP.get(row["budget_label"])
+            if b_idx is None:
+                continue
+            heat[m_idx, b_idx] = row["accuracy_num"]
+            if SHOW_TOKENS and token_grid is not None:
+                token_val = row.get("token_num") if "token_num" in row else None
+                if pd.notna(token_val):
+                    token_grid[m_idx, b_idx] = token_val
+
+    return heat, token_grid
+
+
+def draw_heatmap_panel(
+    ax,
+    dataset_name,
+    heat,
+    token_grid,
+    global_model_order,
+    cmap,
+    text_outline,
+    token_outline,
+    show_y_labels,
+):
+    if np.isnan(heat).all():
+        ax.axis("off")
+        return False
+
+    local_min = np.nanmin(heat)
+    local_max = np.nanmax(heat)
+    if abs(local_max - local_min) < 1e-6:
+        local_max = local_min + 1e-6
+    local_span = local_max - local_min
+
+    ax.axvspan(-0.5, 0.5, color="#f1f3fb", alpha=0.8, zorder=0)
+    ax.imshow(heat, aspect="auto", cmap=cmap, vmin=local_min, vmax=local_max, zorder=1)
+    ax.set_xticks(range(len(BUDGET_ORDER)))
+    ax.set_xticklabels(BUDGET_ORDER, fontsize=10, fontweight="medium")
+    ax.set_yticks(range(len(global_model_order)))
+    if show_y_labels:
+        ax.set_yticklabels(
+            [format_model_name(m) for m in global_model_order],
+            fontsize=MODEL_LABEL_FONTSIZE,
+            fontweight="medium",
+            ha="right",
+        )
+    else:
+        ax.set_yticklabels([])
+    ax.tick_params(axis="y", pad=15)
+    ax.set_xlabel("")
+    ax.set_title(format_dataset_display(dataset_name), fontsize=12, fontweight="semibold", pad=10)
+    ax.tick_params(axis="both", which="both", length=0)
+    ax.set_facecolor("#f4f6fb")
+    ax.set_xlim(-0.5, len(BUDGET_ORDER) - 0.5)
+    ax.set_ylim(len(global_model_order) - 0.5, -0.5)
+    ax.set_aspect("equal")
+    ax.set_xticks(np.arange(-0.5, len(BUDGET_ORDER), 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, len(global_model_order), 1), minor=True)
+    ax.grid(which="minor", color="white", linewidth=0.9)
+    ax.axvline(0.5, color="#9aa5c4", linewidth=0.9, linestyle="--")
+
+    has_tokens = SHOW_TOKENS and token_grid is not None
+    for r_idx in range(len(global_model_order)):
+        for c_idx in range(len(BUDGET_ORDER)):
+            acc_val = heat[r_idx, c_idx]
+            if np.isnan(acc_val):
+                continue
+            norm_val = (acc_val - local_min) / local_span
+            text_color = "#fafafa" if norm_val >= 0.6 else "#1f2a44"
+            ax.text(
+                c_idx,
+                r_idx - 0.15,
+                f"{acc_val:.1f}%",
+                ha="center",
+                va="center",
+                fontsize=8,
+                fontweight="semibold",
+                color=text_color,
+                path_effects=text_outline,
+            )
+            if has_tokens and not np.isnan(token_grid[r_idx, c_idx]):
+                ax.text(
+                    c_idx,
+                    r_idx + 0.22,
+                    f"{token_grid[r_idx, c_idx]:.0f} tok",
+                    ha="center",
+                    va="center",
+                    fontsize=6.3,
+                    color="#f6f8fc" if norm_val >= 0.75 else "#223040",
+                    alpha=0.88,
+                    path_effects=token_outline,
+                )
+    return True
+
+
+def configure_gradient_axis(ax, cmap):
+    gradient = np.linspace(0, 1, 256).reshape(-1, 1)
+    ax.imshow(gradient, aspect="auto", cmap=cmap, origin="lower")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_facecolor("white")
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.annotate(
+        "",
+        xy=(0.5, 0.92),
+        xytext=(0.5, 0.08),
+        xycoords="axes fraction",
+        arrowprops=dict(arrowstyle="-|>", color="#4a5268", lw=0.9),
+        annotation_clip=False,
+    )
+    ax.text(
+        1.25,
+        0.5,
+        "Accuracy (%)",
+        ha="center",
+        va="center",
+        fontsize=9.5,
+        fontweight="semibold",
+        color="#4a5268",
+        rotation=90,
+        rotation_mode="anchor",
+        transform=ax.transAxes,
+    )
+
+
+def align_gradient_axis(heat_ax, gradient_ax):
+    heat_pos = heat_ax.get_position()
+    grad_pos = gradient_ax.get_position()
+    gradient_ax.set_position([grad_pos.x0, heat_pos.y0, grad_pos.width, heat_pos.height])
+
+
+def generate_individual_figures(
+    datasets,
+    dataset_matrices,
+    global_model_order,
+    cmap,
+    text_outline,
+    token_outline,
+):
+    for dataset_name in datasets:
+        heat, token_grid = dataset_matrices[dataset_name]
+        if np.isnan(heat).all():
+            continue
+        fig = plt.figure(figsize=INDIVIDUAL_FIG_SIZE)
+        width_ratios = [1.0, 0.12]
+        grid = fig.add_gridspec(1, 2, width_ratios=width_ratios, wspace=0.08)
+        heat_ax = fig.add_subplot(grid[0, 0])
+        gradient_ax = fig.add_subplot(grid[0, 1])
+        drawn = draw_heatmap_panel(
+            heat_ax,
+            dataset_name,
+            heat,
+            token_grid,
+            global_model_order,
+            cmap,
+            text_outline,
+            token_outline,
+            show_y_labels=True,
+        )
+        if not drawn:
+            plt.close(fig)
+            continue
+        configure_gradient_axis(gradient_ax, cmap)
+        fig.subplots_adjust(left=0.23, right=0.96, top=0.92, bottom=0.08, wspace=0.08)
+        align_gradient_axis(heat_ax, gradient_ax)
+        slug = slugify_label(dataset_name)
+        base_name = INDIVIDUAL_FILENAME_TEMPLATE.format(slug=slug)
+        fig.savefig(BASE_DIR / f"{base_name}.png", dpi=300)
+        fig.savefig(BASE_DIR / f"{base_name}.pdf", dpi=300)
+        plt.close(fig)
+
 
 def format_dataset_name(name: Optional[str]) -> Optional[str]:
     if not isinstance(name, str) or not name.strip():
@@ -306,6 +513,11 @@ def main():
     if not global_model_order:
         raise ValueError("No models available for visualization.")
 
+    dataset_matrices = {
+        dataset_name: prepare_heatmap_data(summary, dataset_name, global_model_order)
+        for dataset_name in datasets
+    }
+
     fig_width, fig_height = FIG_SIZE
     fig = plt.figure(figsize=(fig_width, fig_height))
     width_ratios = [1.0] * ncols + [0.07]
@@ -321,140 +533,35 @@ def main():
     token_outline = [path_effects.Stroke(linewidth=0.8, foreground="white", alpha=0.55), path_effects.Normal()]
 
     for ax_idx, (ax, dataset_name) in enumerate(zip(axes, datasets)):
-        dataset_df = summary[summary["dataset_label"] == dataset_name]
-        heat = np.full((len(global_model_order), len(BUDGET_ORDER)), np.nan)
-        token_grid = np.full_like(heat, np.nan)
+        draw_heatmap_panel(
+            ax,
+            dataset_name,
+            *dataset_matrices[dataset_name],
+            global_model_order,
+            cmap,
+            text_outline,
+            token_outline,
+            show_y_labels=(ax_idx == 0),
+        )
 
-        for m_idx, model_name in enumerate(global_model_order):
-            model_rows = dataset_df[dataset_df["model_label"] == model_name]
-            if model_rows.empty:
-                continue
-            for _, row in model_rows.iterrows():
-                b_idx = ORDER_MAP.get(row["budget_label"])
-                if b_idx is None:
-                    continue
-                heat[m_idx, b_idx] = row["accuracy_num"]
-                token_val = row.get("token_num") if "token_num" in row else None
-                if SHOW_TOKENS and pd.notna(token_val):
-                    token_grid[m_idx, b_idx] = token_val
-
-        if np.isnan(heat).all():
-            ax.axis("off")
-            continue
-
-        local_min = np.nanmin(heat)
-        local_max = np.nanmax(heat)
-        if abs(local_max - local_min) < 1e-6:
-            local_max = local_min + 1e-6
-        local_span = local_max - local_min
-
-        ax.axvspan(-0.5, 0.5, color="#f1f3fb", alpha=0.8, zorder=0)
-        ax.imshow(heat, aspect="auto", cmap=cmap, vmin=local_min, vmax=local_max, zorder=1)
-        ax.set_xticks(range(len(BUDGET_ORDER)))
-        ax.set_xticklabels(BUDGET_ORDER, fontsize=10, fontweight="medium")
-        ax.set_yticks(range(len(global_model_order)))
-        if ax_idx == 0:
-            ax.set_yticklabels(
-                [format_model_name(m) for m in global_model_order],
-                fontsize=MODEL_LABEL_FONTSIZE,
-                fontweight="medium",
-                ha="right",
-            )
-        else:
-            ax.set_yticklabels([])
-        ax.tick_params(axis="y", pad=15)
-        # === Paper Terminology Alignment ===
-        display_name = dataset_name
-        if isinstance(dataset_name, str):
-            normalized = dataset_name.lower()
-            replacements = {
-                "medmcqa": "MedMCQA",
-                "qasc": "QASC",
-            }
-            display_name = replacements.get(normalized, dataset_name)
-        ax.set_xlabel("")
-        ax.set_title(display_name, fontsize=12, fontweight="semibold", pad=10)
-        ax.tick_params(axis="both", which="both", length=0)
-        ax.set_facecolor("#f4f6fb")
-        ax.set_xlim(-0.5, len(BUDGET_ORDER) - 0.5)
-        ax.set_ylim(len(global_model_order) - 0.5, -0.5)
-        ax.set_aspect("equal")
-
-        ax.set_xticks(np.arange(-0.5, len(BUDGET_ORDER), 1), minor=True)
-        ax.set_yticks(np.arange(-0.5, len(global_model_order), 1), minor=True)
-        ax.grid(which="minor", color="white", linewidth=0.9)
-        ax.axvline(0.5, color="#9aa5c4", linewidth=0.9, linestyle="--")
-
-        for r_idx in range(len(global_model_order)):
-            for c_idx in range(len(BUDGET_ORDER)):
-                acc_val = heat[r_idx, c_idx]
-                if np.isnan(acc_val):
-                    continue
-                norm_val = (acc_val - local_min) / local_span
-                text_color = "#fafafa" if norm_val >= 0.6 else "#1f2a44"
-                ax.text(
-                    c_idx,
-                    r_idx - 0.15,
-                    f"{acc_val:.1f}%",
-                    ha="center",
-                    va="center",
-                    fontsize=8,
-                    fontweight="semibold",
-                    color=text_color,
-                    path_effects=text_outline,
-                )
-                if SHOW_TOKENS and not np.isnan(token_grid[r_idx, c_idx]):
-                    ax.text(
-                        c_idx,
-                        r_idx + 0.22,
-                        f"{token_grid[r_idx, c_idx]:.0f} tok",
-                        ha="center",
-                        va="center",
-                        fontsize=6.3,
-                        color="#f6f8fc" if norm_val >= 0.75 else "#223040",
-                        alpha=0.88,
-                        path_effects=token_outline,
-                    )
-    gradient = np.linspace(0, 1, 256).reshape(-1, 1)
-    gradient_ax.imshow(gradient, aspect="auto", cmap=cmap, origin="lower")
-    gradient_ax.set_xticks([])
-    gradient_ax.set_yticks([])
-    gradient_ax.set_facecolor("white")
-    for spine in gradient_ax.spines.values():
-        spine.set_visible(False)
-    gradient_ax.annotate(
-        "",
-        xy=(0.5, 0.92),
-        xytext=(0.5, 0.08),
-        xycoords="axes fraction",
-        arrowprops=dict(arrowstyle="-|>", color="#4a5268", lw=0.9),
-        annotation_clip=False,
-    )
-    # === Paper Terminology Alignment ===
-    gradient_ax.text(
-        1.25,
-        0.5,
-        "Accuracy (%)",
-        ha="center",
-        va="center",
-        fontsize=9.5,
-        fontweight="semibold",
-        color="#4a5268",
-        rotation=90,
-        rotation_mode="anchor",
-        transform=gradient_ax.transAxes,
-    )
-
-
+    configure_gradient_axis(gradient_ax, cmap)
 
     fig.subplots_adjust(left=0.14, right=0.982, top=0.93, bottom=0.01, wspace=0.08)
-    heat_pos = axes[0].get_position()
-    grad_pos = gradient_ax.get_position()
-    gradient_ax.set_position([grad_pos.x0, heat_pos.y0, grad_pos.width, heat_pos.height])
+    align_gradient_axis(axes[0], gradient_ax)
 
     fig.savefig(OUTPUT_PNG, dpi=300)
     fig.savefig(OUTPUT_PDF, dpi=300)
     plt.close(fig)
+
+    if GENERATE_INDIVIDUAL_FIGURES:
+        generate_individual_figures(
+            datasets,
+            dataset_matrices,
+            global_model_order,
+            cmap,
+            text_outline,
+            token_outline,
+        )
 
 
 if __name__ == "__main__":
